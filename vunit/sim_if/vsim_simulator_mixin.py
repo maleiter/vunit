@@ -277,7 +277,7 @@ proc vunit_run {} {
                 f'source "{fix_path(batch_file_name)!s}"',
             ]
 
-            proc = Process(args, cwd=str(Path(self._sim_cfg_file_name).parent))
+            proc = Process(args, cwd=str(Path(self._sim_cfg_file_name).parent),env=self.get_env())
             proc.consume_output()
         except Process.NonZeroExitCode:
             return False
