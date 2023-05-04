@@ -1032,13 +1032,21 @@ other preprocessors. Lowest value first. The order between preprocessors with th
 
     def add_uvvm(self,uvvm_path,libraries=None):
         """
-        Add UVVM from a given source path. 
-        Since UVVM is not included as a sub repository, it must be cloned separately.
+        UVVM https://github.com/UVVM/UVVM is a free and Open Source Methodology and Library which can be used in combination with VUnit.
+        Use add_uvvm to add the UVVM sources from a given path. 
+        Since UVVM is not included in VUnit, it must be cloned separately. 
 
-        The UVVM build system is based on .txt files. There is one txt file that lists all libraries of UVVM called component_list.txt.
-        Then, there is one file per component/library that lists all files of the library in compile order. This file is called compile_order.txt. 
+        Usage examples: 
+        VU.add_uvvm(uvvm_path="../UVVM") # To add all UVVM libraries
 
-        :param uvvm_path: absolute or relative path pointing to the UVVM source directory e.g. ../UVVM
+        To decrease the compile duration, you can specify the libraries needed for simulation. 
+        The following example would compile  uvvm_util, uvvm_vvc_framework and bitvis_vip_clock_generator only:
+        VU.add_uvvm(uvvm_path="../UVVM", libraries=['uvvm_util', 'uvvm_vvc_framework','bitvis_vip_clock_generator'])
+
+        UVVM provides txt files with compile information. There is one txt file that lists all libraries of UVVM called component_list.txt.
+        Then, there is one file per component that lists all files of the library in compile order. This file is called compile_order.txt. 
+
+        :param uvvm_path: absolute or relative path pointing to the UVVM source directory e.g. '../UVVM'
         :param libraries: List of UVVM libraries that are used. If libraries is None, all UVVM libraries are added to VUnit
         """
 
