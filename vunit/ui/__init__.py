@@ -1030,6 +1030,49 @@ other preprocessors. Lowest value first. The order between preprocessors with th
         """
         self._builtins.add("json4vhdl")
 
+    def add_uvvm(self,uvvm_path,libraries=None):
+        """
+        Add UVVM from a given source path. 
+        Since UVVM is not included as a sub repository, it must be cloned separately.
+
+        The UVVM build system is based on .txt files. There is one txt file that lists all libraries of UVVM called component_list.txt.
+        Then, there is one file per component/library that lists all files of the library in compile order. This file is called compile_order.txt. 
+
+        :param uvvm_path: absolute or relative path pointing to the UVVM source directory e.g. ../UVVM
+        :param libraries: List of UVVM libraries that are used. If libraries is None, all UVVM libraries are added to VUnit
+        """
+
+        # load the list of available UVVM components
+        component_list_file = Path(uvvm_path) / "script" / "component_list.txt"
+        if not ostools.file_exists(component_list_file):
+            raise ValueError(f"Found no file named '{component_list_file!s}'. Probably, the UVVM path is incorrect (uvvm_path={uvvm_path}).")
+
+        uvvm_components = []
+        with open(component_list_file) as f:
+            uvvm_components = [s.strip() for s in f.readlines()] # read all components from component_list.txt
+            uvvm_components = [s for s in uvvm_components if (not s.startswith("#")) and s] # remove comments and empty lines
+
+        if libraries != None:
+            # check if all given libraries are available in UVVM
+            if not all(libname in uvvm_components for libname in libraries):
+                raise ValueError(f"some requested libraries are not available in UVVM. Requested: {libraries}, Available UVVM Components: {uvvm_components}")
+            uvvm_components = libraries 
+
+        # add source files of the components
+        for component in uvvm_components:
+            lib = self.add_library(component)
+
+            script_dir = Path(uvvm_path) / component / "script"
+            source_files = []
+            with open(script_dir / "compile_order.txt") as f:
+                source_files = [s.strip() for s in f.readlines()] # read all lines including comments
+                source_files = [s for s in source_files if (not s.startswith("#")) and s] # remove comments and empty lines
+                #add the full path to the list of source files
+                source_files = [os.path.abspath(script_dir / Path(s)) for s in source_files]
+
+            # add the files
+            lib.add_source_files(source_files)
+
     def get_compile_order(self, source_files=None):
         """
         Get the compile order of all or specific source files and
