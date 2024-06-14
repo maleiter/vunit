@@ -13,6 +13,7 @@ from pathlib import Path
 import os
 import re
 import logging
+import sys
 from ..exceptions import CompileError
 from ..ostools import Process, write_file, file_exists, renew_path
 from ..test.suites import get_result_file_name
@@ -340,14 +341,104 @@ proc vunit_run {} {
         vcover_merge_process.consume_output()
         print("Done merging coverage files")
 
+    @staticmethod
+    def _create_restart_function():
+        """ "
+        Create the vunit_restart function to recompile and restart the simulation
+
+        This function is quite complicated to work around limitations
+        of modelsim not being able to change working directory.
+
+        Thus python is called with an explicit command string that in
+        turn call the python command we actually wanted but in the
+        correct working directory using subprocess.call
+
+        -u flag is needed for continuous output
+        """
+        recompile_command = [sys.executable, "-u", sys.argv[0], "--compile"]
+
+        # Strip --clean from re-compile command
+        # Leave other arguments intact since users can add custom CLI options
+        recompile_command += [arg for arg in sys.argv[1:] if arg != "--clean"]
+
+        recompile_command_visual = " ".join(recompile_command)
+
+        # stderr is intentionally re-directed to stdout so that the tcl's catch
+        # relies on the return code from the python process rather than being
+        # tricked by output going to stderr.  See issue #228.
+        recompile_command_eval = [
+            str(sys.executable),
+            "-u",
+            "-c",
+            (
+                "import sys;"
+                "import subprocess;"
+                f"exit(subprocess.call({recompile_command!r}, "
+                f"cwd={str(Path(os.getcwd()).resolve())!r}, "
+                "bufsize=0, "
+                "universal_newlines=True, "
+                "stdout=sys.stdout, "
+                "stderr=sys.stdout))"
+            ),
+        ]
+        recompile_command_eval_tcl = " ".join([f"{{{part}}}" for part in recompile_command_eval])
+
+        return f"""
+proc vunit_compile {{}} {{
+    set cmd_show {{{recompile_command_visual!s}}}
+    puts "Re-compiling using command ${{cmd_show}}"
+
+    set chan [open |[list {recompile_command_eval_tcl!s}] r]
+    echo $chan
+    while {{[gets $chan line] >= 0}} {{
+        puts $line
+    }}
+
+    if {{[catch {{close $chan}} error_msg]}} {{
+        puts "Re-compile failed"
+        puts ${{error_msg}}
+        return true
+    }} else {{
+        puts "Re-compile finished"
+        return false
+    }}
+}}
+
+proc vunit_restart {{}} {{
+    if {{![vunit_compile]}} {{
+        restart
+        vunit_run
+    }}
+}}
+"""
+
     def _create_common_script(self, config, output_path):
         """
         Create tcl script with functions common to interactive and batch modes
         """
-        tcl = ""
+        tcl = """
+proc vunit_help {} {
+    puts {List of VUnit commands:}
+    puts {vunit_help}
+    puts {  - Prints this help}
+    puts {vunit_load [vsim_extra_args]}
+    puts {  - Load design with correct generics for the test}
+    puts {  - Optional first argument are passed as extra flags to vsim}
+    puts {vunit_run}
+    puts {  - Run test, must do vunit_load first}
+    puts {vunit_compile}
+    puts {  - Recompiles the source files}
+    puts {vunit_restart}
+    puts {  - Recompiles the source files}
+    puts {  - and re-runs the simulation if the compile was successful}
+}
+"""
+
         tcl += get_is_test_suite_done_tcl(get_result_file_name(output_path))
         tcl += self._create_load_function(config, output_path)
         tcl += self._create_run_function()
+        tcl += self._create_restart_function()
+        tcl += "scripterconf -tcl\n"
         return tcl
 
     @staticmethod
@@ -384,7 +475,7 @@ proc vunit_run {} {
         if init_file is not None:
             tcl += f'source "{fix_path(str(Path(init_file).resolve()))!s}"\n'
 
-        tcl += 'puts "VUnit help: Design already loaded. Use run -all to run the test."\n'
+        tcl += "vunit_help\n"
 
         return tcl
 
