@@ -458,7 +458,8 @@ proc vunit_help {} {
 
     def _create_gui_script(self, common_file_name, config):
         """
-        Create the user facing script which loads common functions and prints a help message
+        Create the user facing script which loads common functions and prints a help message. 
+        Also defines the vunit_tb_path and the vunit_tb_name variable.
         """
 
         tcl = ""
@@ -473,6 +474,8 @@ proc vunit_help {} {
 
         init_file = config.sim_options.get(self.name + ".init_file.gui", None)
         if init_file is not None:
+            tcl += f'set vunit_tb_name {config.design_unit_name}\n'
+            tcl += f'set vunit_tb_path {fix_path(str(Path(config.tb_path).resolve()))}\n'
             tcl += f'source "{fix_path(str(Path(init_file).resolve()))!s}"\n'
 
         tcl += "vunit_help\n"
